@@ -1,7 +1,6 @@
 # Fruit Sales Calculator
 
-A small system for calculating the price of fruit orders, built for the
-Software Engineer coding assessment. It supports weight- and item-based
+A small system for calculating the price of fruit orders. It supports weight- and item-based
 pricing, optional stackable discounts (quantity-threshold and seasonal),
 an in-memory but DB-ready catalog, and a menu-driven console app for
 building and reviewing an order interactively.
