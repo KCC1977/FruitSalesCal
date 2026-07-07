@@ -29,8 +29,9 @@ tests/FruitSales.Tests/    XUnit tests (Arrange / Act / Assert)
 
 ### Strategy pattern — pricing rules
 
-The core requirement is "different fruit can be priced in different ways,
-and new pricing approaches should be easy to add." `IPricingStrategy`
+Different fruit can be priced in different ways,
+and new pricing approaches should be easy to add.
+`IPricingStrategy`
 captures that as a single contract:
 
 ```csharp
