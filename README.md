@@ -120,11 +120,11 @@ Two things fall out of this design that are worth calling out directly:
   report through the whole chain, because every decorator delegates
   those properties down to `_inner`.
 
-One caveat worth knowing if asked: stacking order doesn't currently
+One caveat: stacking order doesn't currently
 affect the final price, because percentage discounts are multiplicative
 and multiplication is commutative. It would matter if a future discount
 were a flat amount rather than a percentage — a known limitation of the
-current model rather than something addressed yet.
+current model.
 
 A design trade-off left deliberately unresolved: `BasePrice`, `Unit`, and
 part of `StrategyName` are duplicated (as identical one-line delegations
@@ -157,37 +157,8 @@ settable `Today`, letting every boundary (before / on start date / during
 
 ### Factory pattern — building strategies, not fruit
 
-The factory went through a real design iteration worth describing
-directly, because it's a stronger interview answer than a clean history
-would be: the first version had one method per fruit
-(`CreateApplePricing()`, `CreateCherryPricing()`, and so on), which meant
-the factory would grow by one method for every new fruit added — an
-unbounded, ever-growing class. That's a smell, not just a style
-preference.
-
-The fix was to make the factory build strategy types, with no knowledge
-of which specific fruit uses which strategy:
-
-```csharp
-public class PricingStrategyFactory
-{
-    public IPricingStrategy CreatePerWeight(decimal pricePerKg) =>
-        new PerWeightPricingStrategy(pricePerKg);
-
-    public IPricingStrategy CreatePerItem(decimal pricePerItem) =>
-        new PerItemPricingStrategy(pricePerItem);
-
-    public IPricingStrategy WithThresholdDiscount(IPricingStrategy inner, decimal threshold, decimal discountRate) =>
-        new ThresholdDiscountDecorator(inner, threshold, discountRate);
-
-    public IPricingStrategy WithSeasonalDiscount(
-        IPricingStrategy inner, DateOnly startDate, DateOnly endDate, decimal discountRate, IDateTimeProvider clock) =>
-        new SeasonalDiscountDecorator(inner, startDate, endDate, discountRate, clock);
-}
-```
-
 This is a Simple Factory (a class with methods that build objects) — not
-Factory Method or Abstract Factory. The fruit-to-strategy mapping now
+Factory Method or Abstract Factory. The fruit-to-strategy mapping 
 lives entirely in the catalog's seed data (see below), which is the only
 place that changes when a new fruit is added — the factory itself is
 stable regardless of how many fruit exist.
@@ -224,9 +195,7 @@ var seedFruits = new[]
 };
 ```
 
-The brief doesn't actually require persistence, so this seemed like the
-right amount of "database-ready" without introducing infrastructure (or a
-SQL instance) the exercise doesn't call for. Swapping to a real data store
+Swapping to a real data store
 means adding an `EfFruitRepository` or `DapperFruitRepository`
 implementing the same interface — `OrderCalculator`, `Program.cs`, and
 every test written against `IFruitRepository` need no changes at all.
@@ -300,12 +269,6 @@ Add a genuinely new pricing model (for example, "buy 3 get 1 free"): add
 a new class implementing `IPricingStrategy` directly, or as a decorator
 if it's naturally a modifier on top of an existing strategy, and a
 corresponding factory method.
-
-Move the catalog to a real database: implement `IFruitRepository` against
-SQL Server or Oracle (EF Core or Dapper), and swap it in wherever
-`InMemoryFruitRepository` is currently constructed. No changes needed to
-`OrderCalculator`, `Program.cs`, or any test written against
-`IFruitRepository`.
 
 Remove the decorator duplication (`BasePrice`/`Unit`/part of
 `StrategyName` delegation, repeated in both decorators): extract an
