@@ -17,32 +17,17 @@ while (running)
 
     switch (choice)
     {
-        case "1":
-            ViewCatalog(repository);
-            break;
-        case "2":
-            AddFruit(repository, factory);
-            break;
-        case "3":
-            AddFruitToOrder(repository, currentOrder);
-            break;
-        case "4":
-            RemoveFruitFromOrder(currentOrder);
-            break;
-        case "5":
-            PrintOrder(currentOrder, calculator);
-            break;
-        case "6":
-            LoadSampleOrder(repository, currentOrder);
-            break;
-        case "7":
-            running = false;
-            break;
-        default:
-            Console.WriteLine("Not a valid option, try again.");
-            break;
+        case "1": ViewCatalog(repository); break;
+        case "2": AddFruit(repository, factory); break;
+        case "3": ChangeBaseStrategy(repository, factory); break;
+        case "4": ManageDiscounts(repository, factory); break;
+        case "5": AddFruitToOrder(repository, currentOrder); break;
+        case "6": RemoveFruitFromOrder(currentOrder); break;
+        case "7": PrintOrder(currentOrder, calculator); break;
+        case "8": LoadSampleOrder(repository, currentOrder); break;
+        case "9": running = false; break;
+        default: Console.WriteLine("Not a valid option, try again."); break;
     }
-
     Console.WriteLine();
 }
 
@@ -54,11 +39,13 @@ static void PrintMenu()
     Console.WriteLine("=======================");
     Console.WriteLine("1. View catalog");
     Console.WriteLine("2. Add a new fruit to the catalog");
-    Console.WriteLine("3. Add fruit to the current order");
-    Console.WriteLine("4. Remove fruit from the current order");
-    Console.WriteLine("5. View current order");
-    Console.WriteLine("6. Load a sample order");
-    Console.WriteLine("7. Exit");
+    Console.WriteLine("3. Change a fruit's base pricing method");
+    Console.WriteLine("4. Add or remove a discount on a fruit");
+    Console.WriteLine("5. Add fruit to the current order");
+    Console.WriteLine("6. Remove fruit from the current order");
+    Console.WriteLine("7. View current order");
+    Console.WriteLine("8. Load a sample order");
+    Console.WriteLine("9. Exit");
     Console.Write("Choose an option: ");
 }
 
@@ -83,17 +70,30 @@ static void LoadSampleOrder(IFruitRepository repository, Order order)
     order.AddLine(cherry, 3m);        // 3kg of cherries -> over the 2kg discount threshold
     order.AddLine(strawberry, 1.5m);  // 1.5kg of strawberries -> seasonal discount if in-season today
 
-    Console.WriteLine("Sample order loaded. Choose option 5 to view it.");
+    Console.WriteLine("Sample order loaded. Choose option 7 to view it.");
 }
 
 static void ViewCatalog(IFruitRepository repository)
 {
     Console.WriteLine();
     Console.WriteLine("Catalog:");
+
     foreach (var fruit in repository.GetAll())
     {
-        var unitLabel = fruit.Strategy.Unit == PricingUnit.Weight ? "kg" : "item";
-        Console.WriteLine($"  {fruit.Name,-12} base price: ${fruit.BasePrice,-6:F2} per {unitLabel} ({fruit.Strategy.StrategyName})");
+        var unitLabel = fruit.BaseStrategy.Unit == PricingUnit.Weight ? "kg" : "item";
+        Console.WriteLine($"  {fruit.Name,-12} base price: ${fruit.BasePrice,-6:F2} per {unitLabel} ({fruit.BaseStrategy.StrategyName})");
+
+        if (fruit.Discounts.Count == 0)
+        {
+            Console.WriteLine("    (no active discounts)");
+        }
+        else
+        {
+            foreach (var discount in fruit.Discounts)
+            {
+                Console.WriteLine($"    + {discount.Description}");
+            }
+        }
     }
 }
 
@@ -109,6 +109,32 @@ static void AddFruit(IFruitRepository repository, PricingStrategyFactory factory
         return;
     }
 
+    var baseStrategy = PromptForBaseStrategy(factory);
+    if (baseStrategy is null)
+        return;
+
+    var fruit = new Fruit(name, baseStrategy);
+
+    Console.Write("Add a quantity/weight threshold discount? (y/n): ");
+    if (IsYes(Console.ReadLine()))
+    {
+        var spec = PromptForThresholdDiscount(factory);
+        if (spec is not null) fruit.AddDiscount(spec);
+    }
+
+    Console.Write("Add a seasonal discount? (y/n): ");
+    if (IsYes(Console.ReadLine()))
+    {
+        var spec = PromptForSeasonalDiscount(factory);
+        if (spec is not null) fruit.AddDiscount(spec);
+    }
+
+    repository.Add(fruit);
+    Console.WriteLine($"Added {name} to the catalog.");
+}
+
+static IPricingStrategy? PromptForBaseStrategy(PricingStrategyFactory factory)
+{
     Console.Write("Pricing method - (1) per kg or (2) per item: ");
     var methodChoice = (Console.ReadLine() ?? "").Trim();
 
@@ -116,41 +142,25 @@ static void AddFruit(IFruitRepository repository, PricingStrategyFactory factory
     if (!decimal.TryParse(Console.ReadLine(), out var basePrice))
     {
         Console.WriteLine("Invalid price - cancelled.");
-        return;
+        return null;
     }
 
-    IPricingStrategy strategy;
     try
     {
-        strategy = methodChoice == "2"
+        return methodChoice == "2"
             ? factory.CreatePerItem(basePrice)
             : factory.CreatePerWeight(basePrice);
     }
     catch (ArgumentOutOfRangeException ex)
     {
         Console.WriteLine($"Could not create pricing strategy: {ex.Message}");
-        return;
+        return null;
     }
-
-    Console.Write("Add a quantity/weight threshold discount? (y/n): ");
-    if (IsYes(Console.ReadLine()))
-    {
-        strategy = AddThresholdDiscount(factory, strategy);
-    }
-
-    Console.Write("Add a seasonal discount? (y/n): ");
-    if (IsYes(Console.ReadLine()))
-    {
-        strategy = AddSeasonalDiscount(factory, strategy);
-    }
-
-    repository.Add(new Fruit(name, strategy));
-    Console.WriteLine($"Added {name} to the catalog.");
 }
 
-static IPricingStrategy AddThresholdDiscount(PricingStrategyFactory factory, IPricingStrategy inner)
+static IDiscountSpec? PromptForThresholdDiscount(PricingStrategyFactory factory)
 {
-    Console.Write("  Threshold (kg or items, whichever the fruit uses): ");
+    Console.Write("  Threshold (kg or items): ");
     decimal.TryParse(Console.ReadLine(), out var threshold);
 
     Console.Write("  Discount rate (e.g. 0.10 for 10%): ");
@@ -158,16 +168,16 @@ static IPricingStrategy AddThresholdDiscount(PricingStrategyFactory factory, IPr
 
     try
     {
-        return factory.WithThresholdDiscount(inner, threshold, rate);
+        return factory.CreateThresholdDiscount(threshold, rate);
     }
     catch (ArgumentOutOfRangeException ex)
     {
-        Console.WriteLine($"  Could not apply threshold discount: {ex.Message}");
-        return inner;
+        Console.WriteLine($"  Could not create threshold discount: {ex.Message}");
+        return null;
     }
 }
 
-static IPricingStrategy AddSeasonalDiscount(PricingStrategyFactory factory, IPricingStrategy inner)
+static IDiscountSpec? PromptForSeasonalDiscount(PricingStrategyFactory factory)
 {
     Console.Write("  Season start date (yyyy-MM-dd): ");
     DateOnly.TryParse(Console.ReadLine(), out var startDate);
@@ -180,12 +190,12 @@ static IPricingStrategy AddSeasonalDiscount(PricingStrategyFactory factory, IPri
 
     try
     {
-        return factory.WithSeasonalDiscount(inner, startDate, endDate, rate, new SystemDateTimeProvider());
+        return factory.CreateSeasonalDiscount(startDate, endDate, rate, new SystemDateTimeProvider());
     }
     catch (ArgumentOutOfRangeException ex)
     {
-        Console.WriteLine($"  Could not apply seasonal discount: {ex.Message}");
-        return inner;
+        Console.WriteLine($"  Could not create seasonal discount: {ex.Message}");
+        return null;
     }
 }
 
@@ -218,6 +228,101 @@ static void AddFruitToOrder(IFruitRepository repository, Order order)
         string.Equals(line.Fruit.Name, fruit.Name, StringComparison.OrdinalIgnoreCase));
 
     Console.WriteLine($"{fruit.Name} is now at {updatedLine.QuantityOrWeight} in your order.");
+}
+
+static void ChangeBaseStrategy(IFruitRepository repository, PricingStrategyFactory factory)
+{
+    Console.WriteLine();
+    Console.Write("Fruit name to change: ");
+    var name = (Console.ReadLine() ?? "").Trim();
+
+    var fruit = repository.GetByName(name);
+    if (fruit is null)
+    {
+        Console.WriteLine($"No fruit named '{name}' found in the catalog.");
+        return;
+    }
+
+    Console.WriteLine($"Current base: ${fruit.BasePrice:F2} ({fruit.BaseStrategy.StrategyName})");
+
+    var newBaseStrategy = PromptForBaseStrategy(factory);
+    if (newBaseStrategy is null)
+        return;
+
+    fruit.SetBaseStrategy(newBaseStrategy);
+    Console.WriteLine($"{fruit.Name}'s base pricing is now ${fruit.BasePrice:F2} ({fruit.BaseStrategy.StrategyName}). Active discounts are unchanged.");
+}
+
+static void ManageDiscounts(IFruitRepository repository, PricingStrategyFactory factory)
+{
+    Console.WriteLine();
+    Console.Write("Fruit name: ");
+    var name = (Console.ReadLine() ?? "").Trim();
+
+    var fruit = repository.GetByName(name);
+    if (fruit is null)
+    {
+        Console.WriteLine($"No fruit named '{name}' found in the catalog.");
+        return;
+    }
+
+    Console.WriteLine($"{fruit.Name} - current pricing: {fruit.Strategy.StrategyName}");
+    Console.WriteLine("1. Add a threshold discount");
+    Console.WriteLine("2. Add a seasonal discount");
+    Console.WriteLine("3. Remove a discount");
+    Console.Write("Choose an option: ");
+    var choice = (Console.ReadLine() ?? "").Trim();
+
+    switch (choice)
+    {
+        case "1":
+            var thresholdSpec = PromptForThresholdDiscount(factory);
+            if (thresholdSpec is not null)
+            {
+                fruit.AddDiscount(thresholdSpec);
+                Console.WriteLine("Threshold discount added.");
+            }
+            break;
+        case "2":
+            var seasonalSpec = PromptForSeasonalDiscount(factory);
+            if (seasonalSpec is not null)
+            {
+                fruit.AddDiscount(seasonalSpec);
+                Console.WriteLine("Seasonal discount added.");
+            }
+            break;
+        case "3":
+            RemoveDiscount(fruit);
+            break;
+        default:
+            Console.WriteLine("Not a valid option.");
+            break;
+    }
+}
+
+static void RemoveDiscount(Fruit fruit)
+{
+    if (fruit.Discounts.Count == 0)
+    {
+        Console.WriteLine($"{fruit.Name} has no active discounts.");
+        return;
+    }
+
+    Console.WriteLine("Active discounts:");
+    for (var i = 0; i < fruit.Discounts.Count; i++)
+    {
+        Console.WriteLine($"  {i + 1}. {fruit.Discounts[i].Description}");
+    }
+
+    Console.Write("Enter the number of the discount to remove: ");
+    if (!int.TryParse(Console.ReadLine(), out var choice) || choice < 1 || choice > fruit.Discounts.Count)
+    {
+        Console.WriteLine("Invalid selection - cancelled.");
+        return;
+    }
+
+    fruit.RemoveDiscount(fruit.Discounts[choice - 1]);
+    Console.WriteLine("Discount removed.");
 }
 
 static void RemoveFruitFromOrder(Order order)

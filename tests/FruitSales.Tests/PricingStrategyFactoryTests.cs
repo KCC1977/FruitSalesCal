@@ -35,13 +35,11 @@ public class PricingStrategyFactoryTests
     }
 
     [Fact]
-    public void WithThresholdDiscount_AppliesDiscount_WhenOverThreshold()
+    public void CreateThresholdDiscount_AppliesDiscount_WhenAppliedOverThreshold()
     {
         // Arrange
-        var strategy = _factory.WithThresholdDiscount(
-            inner: _factory.CreatePerWeight(5.00m),
-            threshold: 2m,
-            discountRate: 0.10m);
+        var spec = _factory.CreateThresholdDiscount(threshold: 2m, discountRate: 0.10m);
+        var strategy = spec.Apply(_factory.CreatePerWeight(5.00m));
 
         // Act
         var price = strategy.CalculatePrice(3m);
@@ -50,15 +48,15 @@ public class PricingStrategyFactoryTests
         Assert.Equal(13.50m, price);
     }
 
+
     [Fact]
-    public void WithThresholdDiscount_NoDiscount_WhenAtOrBelowThreshold()
+    public void CreateThresholdDiscount_NoDiscount_WhenAtOrBelowThreshold()
     {
         // Arrange
-        var strategy = _factory.WithThresholdDiscount(
-            inner: _factory.CreatePerWeight(5.00m),
+        var spec = _factory.CreateThresholdDiscount(
             threshold: 2m,
             discountRate: 0.10m);
-
+        var strategy = spec.Apply(_factory.CreatePerWeight(5.00m));
         // Act
         var price = strategy.CalculatePrice(2m);
 
@@ -67,37 +65,36 @@ public class PricingStrategyFactoryTests
     }
 
     [Fact]
-    public void WithSeasonalDiscount_AppliesDiscount_WhenWithinDateRange()
+    public void CreateSeasonalDiscount_AppliesDiscount_WhenWithinDateRange()
     {
         // Arrange
         var clock = new FakeDateTimeProvider { Today = new DateOnly(2026, 12, 15) };
-        var strategy = _factory.WithSeasonalDiscount(
-            inner: _factory.CreatePerWeight(6.00m),
+        var spec = _factory.CreateSeasonalDiscount(
             startDate: new DateOnly(2026, 10, 1),
             endDate: new DateOnly(2027, 3, 31),
             discountRate: 0.20m,
             clock: clock);
+        var strategy = spec.Apply(_factory.CreatePerWeight(6.00m));
 
         // Act
         var price = strategy.CalculatePrice(2m);
 
         // Assert
-        // 2kg * $6.00 = $12.00, minus 20% = $9.60
         Assert.Equal(9.60m, price);
     }
 
     [Fact]
-    public void WithSeasonalDiscount_NoDiscount_WhenOutsideDateRange()
+    public void CreateSeasonalDiscount_NoDiscount_WhenOutsideDateRange()
     {
         // Arrange
         var clock = new FakeDateTimeProvider { Today = new DateOnly(2026, 6, 1) };
-        var strategy = _factory.WithSeasonalDiscount(
-            inner: _factory.CreatePerWeight(6.00m),
+        var spec = _factory.CreateSeasonalDiscount(
             startDate: new DateOnly(2026, 10, 1),
             endDate: new DateOnly(2027, 3, 31),
             discountRate: 0.20m,
             clock: clock);
-
+        
+        var strategy = spec.Apply(_factory.CreatePerWeight(6.00m));
         // Act
         var price = strategy.CalculatePrice(2m);
 

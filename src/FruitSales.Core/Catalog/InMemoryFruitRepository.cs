@@ -14,30 +14,26 @@ public class InMemoryFruitRepository : IFruitRepository
     private readonly Dictionary<string, Fruit> _fruits;
 
     public InMemoryFruitRepository(PricingStrategyFactory? factory = null)
-    {
-        factory ??= new PricingStrategyFactory();
+{
+    factory ??= new PricingStrategyFactory();
 
-        var seedFruits = new[]
-        {
-            new Fruit("Apple", factory.CreatePerWeight(2.00m)),
+    var apple = new Fruit("Apple", factory.CreatePerWeight(2.00m));
+    var banana = new Fruit("Banana", factory.CreatePerItem(0.30m));
 
-            new Fruit("Banana", factory.CreatePerItem(0.30m)),
+    var cherry = new Fruit("Cherry", factory.CreatePerWeight(5.00m));
+    cherry.AddDiscount(factory.CreateThresholdDiscount(threshold: 2m, discountRate: 0.10m));
 
-            new Fruit("Cherry", factory.WithThresholdDiscount(
-                inner: factory.CreatePerWeight(5.00m),
-                threshold: 2m,
-                discountRate: 0.10m)),
+    var strawberry = new Fruit("Strawberry", factory.CreatePerWeight(6.00m));
+    strawberry.AddDiscount(factory.CreateSeasonalDiscount(
+        startDate: new DateOnly(2026, 10, 1),
+        endDate: new DateOnly(2027, 3, 31),
+        discountRate: 0.20m,
+        clock: new SystemDateTimeProvider()));
 
-            new Fruit("Strawberry", factory.WithSeasonalDiscount(
-                inner: factory.CreatePerWeight(6.00m),
-                startDate: new DateOnly(2026, 10, 1),
-                endDate: new DateOnly(2027, 3, 31),
-                discountRate: 0.20m,
-                clock: new SystemDateTimeProvider())),
-        };
+    var seedFruits = new[] { apple, banana, cherry, strawberry };
 
-        _fruits = seedFruits.ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
-    }
+    _fruits = seedFruits.ToDictionary(f => f.Name, StringComparer.OrdinalIgnoreCase);
+}
 
     public void Add(Fruit fruit)
     {

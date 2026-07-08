@@ -54,9 +54,8 @@ public class OrderCalculatorTests
     public void CalculateTotal_UsesEachFruitsOwnStrategy_IncludingDiscounts()
     {
         // Arrange
-        var cherry = new Fruit(
-            "Cherry",
-            new ThresholdDiscountDecorator(new PerWeightPricingStrategy(5.00m), threshold: 2m, discountRate: 0.10m));
+        var cherry = new Fruit("Cherry", new PerWeightPricingStrategy(5.00m));
+        cherry.AddDiscount(new ThresholdDiscountSpec(threshold: 2m, discountRate: 0.10m));
         var lines = new[] { new OrderLine(cherry, 3m) };
         var calculator = new OrderCalculator();
 
